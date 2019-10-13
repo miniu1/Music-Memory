@@ -41,7 +41,7 @@
  * 
  */
 
-int		get_user_input(const char *prompt, char *user_input, size_t user_input_limit);
+int	get_user_input(const char *prompt, char *user_input, size_t user_input_limit);
 int 	egetus(char *buf, size_t lim, const char *prompt);
 
 int 	string_compare(char *str1, const char *str2);
@@ -308,18 +308,17 @@ int add_song(PGconn *connection) {
 	char 	main_query[LIMIT];
 	char	*main_query_ptr;
 	
-	// Query variables
+	/* Query variables */
 	char 	query[LIMIT];							
 	char	*query_ptr;
 
-	// Query result variables
+	/* Query result variables */
 	PGresult *query_result;
 
-	// User input variables
+	/* User input variables */
 	char	user_input[LIMIT];
 	char	*user_input_ptr;
 	
-	/* */
 	PQprintOpt print_options;
 	
 	/* Insert user artist string into query string */
@@ -341,7 +340,7 @@ int add_song(PGconn *connection) {
 	
 	char *endptr;
 	
-	// long int variable holding user's selected artist id
+	/* long int variable holding user's selected artist id */
 	long int artist_id;
 	
 	/* Initialize main query buf and str */
@@ -364,26 +363,30 @@ int add_song(PGconn *connection) {
 	print_options.align = 1;
 	print_options.fieldSep = "|";
 			
-    // Get artist name(s) from user
+    	/* Get artist name(s) from user */
 	printf("Enter artist(s): ");
 	if (fgets(user_input_ptr, sizeof(user_input), stdin) == NULL) {
 		printf("error: input");
 		return -1;
 	}
 		
-	// Get rid of newline
+	/* Get rid of newline */
 	if (*(user_input_ptr + (strlen(user_input_ptr) - 1)) == '\n')
 		*(user_input_ptr + (strlen(user_input_ptr) - 1)) = '\0';
 	
-	// Ensure string is safe to include in sql query to psql
-	// Need to free memory with PQfreemem();
+	/* 
+	 * Ensure string is safe to include in sql query to psql
+	 * Need to free memory with PQfreemem();
+	 */
 	if ((user_input_ptr = PQescapeLiteral(connection, user_input_ptr, sizeof(user_input))) == NULL) {
 		printf("error: escape input");
 		return -2;
 	}
 	
-	// Compute address to insert artist within query
-	// hardcoded at first for now
+	/*
+	 * Compute address to insert artist within query
+	 * hardcoded at first for now
+	 */
 	query_insert_addr = query_ptr + strlen(query_ptr) - 1;
 	query_shift_addr = NULL;
 	
@@ -395,16 +398,16 @@ int add_song(PGconn *connection) {
 	last_addr_in_query_str = query_ptr + strlen(query_ptr);
 	last_addr_in_query_buf = query_ptr + sizeof(query) - 1;
 	
-	// number of rows returned from check query
+	/* number of rows returned from check query */
 	tuples = 0;
 	
 	
-	// buffer used for artist id input from user as string
+	/* buffer used for artist id input from user as string */
 	a_id_buf[LIMIT];
 	a_id_buf[0] = ' ';
 	a_id_buf_ptr = &(a_id_buf[0]);
 
-	// Search for commas in user input
+	/* Search for commas in user input */
 	do {
 		/* 
 		 * compute artist name length. If no comma found,
