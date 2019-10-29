@@ -308,17 +308,17 @@ int add_song(PGconn *connection) {
 	/* Initialize main query buf and str */
 	main_query_ptr = main_query;
 	strncpy(main_query_ptr, "SELECT s.song_name, al.album_name, a.artist_name "
-							"FROM songs AS s "
-							"JOIN albums AS al ON s.album_id=al.album_id "
-							"JOIN album_contributing_artists AS ca ON al.album_id=ca.album_id "
-							"JOIN artists AS a ON ca.artist_id=a.artist_id "
-							"WHERE ;", sizeof(main_query));
+				"FROM songs AS s "
+				"JOIN albums AS al ON s.album_id=al.album_id "
+				"JOIN album_contributing_artists AS ca ON al.album_id=ca.album_id "
+				"JOIN artists AS a ON ca.artist_id=a.artist_id "
+				"WHERE ;", sizeof(main_query));
 	
 	/* Initialize query buf and str */
 	query_ptr = query;
 	strncpy(query_ptr, 	"SELECT * "
-						"FROM artists "
-						"WHERE artist_name=;", sizeof(query));
+				"FROM artists "
+				"WHERE artist_name=;", sizeof(query));
 	
 	/* Setup print options struct */
 	print_options.header = 1;
@@ -333,7 +333,7 @@ int add_song(PGconn *connection) {
 		return -1;
 	}
 	
-    /* Get artist name(s) from user */
+    	/* Get artist name(s) from user */
 	printf("Enter artist(s): ");
 	if (fgets(user_input_ptr, sizeof(user_input), stdin) == NULL) {
 		printf("error: input");
