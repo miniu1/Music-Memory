@@ -302,6 +302,9 @@ int add_song(PGconn *connection) {
 	/* long int variable holding user's selected artist id */
 	long int artist_id;
 	
+	/* Artist count */
+	char artist_count;
+	
 	/* Initialize main query buf and str */
 	main_query_ptr = main_query;
 	strncpy(main_query_ptr, "SELECT s.song_name, al.album_name, a.artist_name "
@@ -323,6 +326,12 @@ int add_song(PGconn *connection) {
 	print_options.fieldSep = "|";
 			
 	user_input_ptr = user_input;	
+	
+	/* Get number of artists from user */
+	printf("Enter number of artists: ");
+	if (fgets(user_input_ptr, sizeof(user_input), stdin) == NULL) {
+		return -1;
+	}
 	
     /* Get artist name(s) from user */
 	printf("Enter artist(s): ");
@@ -366,10 +375,7 @@ int add_song(PGconn *connection) {
 	/* buffer used for artist id input from user as string */
 	a_id_buf[0] = ' ';
 	a_id_buf_ptr = &(a_id_buf[0]);
-
-	/* Get number of artists from user */
-	printf("Enter number of artists: ");
-	if (fgets(user_input_ptr, sizeof(user_input), stdin) == NULL)
+	
 
 	/* Search for commas in user input */
 	do {
