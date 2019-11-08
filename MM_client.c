@@ -324,8 +324,8 @@ int add_song(PGconn *connection) {
 	print_options.header = 1;
 	print_options.align = 1;
 	print_options.fieldSep = "|";
-			
-	user_input_ptr = user_input;	
+	
+	user_input_ptr = user_input;
 	
 	/* FEATURE: specify multiple artists will be put on hold for now */
 	/* Get number of artists from user */
@@ -337,7 +337,7 @@ int add_song(PGconn *connection) {
 	*/
 	
     	/* Get artist name(s) from user */
-	printf("Enter artist(s): ");
+	printf("Enter artist name: ");
 	if (fgets(user_input_ptr, sizeof(user_input), stdin) == NULL) {
 		printf("error: input");
 		return -1;
@@ -365,7 +365,7 @@ int add_song(PGconn *connection) {
 	
 	artist_nlength = 0;
 									
-	comma_addr = NULL;
+	/* comma_addr = NULL; */
 	temp_p = user_input_ptr;
 		
 	last_addr_in_query_str = query_ptr + strlen(query_ptr);
@@ -373,6 +373,17 @@ int add_song(PGconn *connection) {
 	
 	/* number of rows returned from check query */
 	tuples = 0;
+	
+	/* Shift elements in query */
+	if (query_insert_addr + strlen(query_insert_addr) > last_addr_in_query_buf) {
+		printf("error: unable to shift");
+		return -3;
+	} query_shift_addr = query_insert_addr + artist_nlength;
+	
+	memmove(query_shift_addr, query_insert_addr, strlen(query_insert_addr) + 1);
+	/* Insert artist name into query */
+	memmove(query_insert_addr, temp_p, artist_nlength);
+	printf("[Artist Lookup Query]: %s\n", query_ptr);
 	
 	
 	/* buffer used for artist id input from user as string */
