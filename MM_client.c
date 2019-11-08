@@ -327,11 +327,14 @@ int add_song(PGconn *connection) {
 			
 	user_input_ptr = user_input;	
 	
+	/* FEATURE: specify multiple artists will be put on hold for now */
 	/* Get number of artists from user */
+	/*
 	printf("Enter number of artists: ");
 	if (fgets(user_input_ptr, sizeof(user_input), stdin) == NULL) {
 		return -1;
 	}
+	*/
 	
     	/* Get artist name(s) from user */
 	printf("Enter artist(s): ");
@@ -373,17 +376,20 @@ int add_song(PGconn *connection) {
 	
 	
 	/* buffer used for artist id input from user as string */
+	/*
 	a_id_buf[0] = ' ';
 	a_id_buf_ptr = &(a_id_buf[0]);
 	
 
 	/* Search for commas in user input */
+	/*
 	do {
 		/* 
 		 * compute artist name length. If no comma found,
 		 * take len of user input as artist length.
 		 * 
 		 */
+		/*
 		if ((comma_addr = strchr(temp_p, ',')) != NULL)
 			artist_nlength = comma_addr - temp_p;
 		else
@@ -393,13 +399,16 @@ int add_song(PGconn *connection) {
 		 * Want to insert ' AND artist_name=' into query if more than 
 		 * one artist has been found on each iteration
 		 */
+		/*
 		 if (temp_p != user_input_ptr) {
 			 printf("second artist\n");
 			 /* Do shifting first */
+			 /*
 			 query_shift_addr = query_insert_addr + strlen(" AND artist_name=");
 			 memmove(query_shift_addr, query_insert_addr, strlen(query_insert_addr) + 1);
 			 
 			 /* Now insert */
+			/*
 			 memmove(query_insert_addr, temp_p, artist_nlength);
 			 query_insert_addr = query + strlen(query) - 1;
 		 }
@@ -408,8 +417,10 @@ int add_song(PGconn *connection) {
 		 * Determine if necessary to perform element shifting
 		 * Case: artist name is inserted within query string
 		 */
+		/*
 		if ((query_insert_addr >= query_ptr) && (query_insert_addr <= last_addr_in_query_str)) {
 			/* Ensure element shifting doesn't cause overflow */
+	/*
 			if (query_insert_addr + strlen(query_insert_addr) > last_addr_in_query_buf) {
 				printf("error: unable to shift");
 				return -3;
@@ -420,8 +431,10 @@ int add_song(PGconn *connection) {
 			 * distance between comma_addr and temp_p
 			 * will give the length of artist name
 			 */
+	/*
 			query_shift_addr = query_insert_addr + artist_nlength;
 			/* copy strlen(query_insert_addr) + 1 bytes from query_insert_addr to include '\0' */
+	/*
 			memmove(query_shift_addr, query_insert_addr, strlen(query_insert_addr) + 1);
 			
 		/* 
@@ -431,6 +444,8 @@ int add_song(PGconn *connection) {
 		 * whitespace characters will need to be written
 		 * up until the insert address.
 		 */
+	
+	/*
 		} else if (query_insert_addr >=	(last_addr_in_query_str) && query_insert_addr <= last_addr_in_query_buf) {
 			/*
 			 * Ensure only one null char is present at the 
@@ -439,23 +454,28 @@ int add_song(PGconn *connection) {
 			 * sure unwanted null chars and data is not in 
 			 * the buffer leading to the insert address.
 			 */
+	/*
 			memset(last_addr_in_query_str, ' ', (query_insert_addr - last_addr_in_query_str));
 			/* Ensure there is null char at end of entire string */
+	/*
 			*(query_insert_addr + artist_nlength) = '\0';
 			
 			
 		/* Case: insert address falls outside the bounds of buffer. */
+	/*
 		} else {
 			printf("error: out of bounds insert\n");
 			return -4;
 		}
 		
 		/* Insert ampersand */
+	/*
 		if (temp_p != user_input_ptr) {
 			
 		}
 		
 		/* Insert artist name into query */
+	/*
 		memmove(query_insert_addr, temp_p, artist_nlength);
 		printf("[Artist Lookup Query]: %s\n", query_ptr);
 		temp_p = comma_addr + 1;
