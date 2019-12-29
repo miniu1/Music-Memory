@@ -1,9 +1,14 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <libpq-fe.h>
+#include "libpq-fe.h"
+#include <limits.h>
+#include "keyin.h"
 
-#define LIMIT 450	/* buf max size */
+#define LIMIT 			450	/* buf max size */
+#define ENTITY_COUNT 	3	/* Number of entities (artist, album, song) to be used in queries */
+#define USER_EXIT		6
+
 
 /*
  * How do I organize many similar/different options like
@@ -11,9 +16,6 @@
  * edit album, etc. as the queries behind these commands will
  * more or less be very similar
  *
- *
- * TODO consider replacing all literal strings with an array
- * 		may not be all that good of an idea
  *
  *
  * TODO replace get_user_input() with implementation of fgets()
@@ -31,45 +33,36 @@
  * 	problem mentioned above.  
  * 	EDIT: return types int to indicate error codes
  * 
- * PROBLEM:
- * 	In the case of ensuring that dereferences doesn't occur
- *  with null pointers where there are more than 1 pointer,
- * 	should I only indicate that one of the many pointers 
- * 	contains a null value or should I be specific 
- * 
  * 
  * 
  */
-
-int	get_user_input(const char *prompt, char *user_input, size_t user_input_limit);
-int 	egetus(char *buf, size_t lim, const char *prompt);
-
+ 
+ /* Utility functions */
 int 	string_compare(char *str1, const char *str2);
-int 	insert_string(char *str1, char *str2, size_t str1_limit, int insert_index);
-void 	query_show(PGconn *connection, const char *query, PQprintOpt print_options);
-int 	add_song(PGconn *connection);
-int 	fill_string(char *d_str, size_t d_str_limit, const char *s_str);
+char 	*insert_string(char *dest, const char *src, size_t dest_size, int index);
 
-void 	main_menu();
+/* Core functions */
+void 	query_show(PGconn *connection, const char *query, PQprintOpt *print_options);
+int 	add_song(PGconn *connection);
+int		search(PGconn *connection, PQprintOpt *print_options);
+int		edit_entity(PGconn *connection);
+
+void 	main_menu(void);
 
 int main(void) {
-	/*
-	 *  PostgreSQL database connection variables
-	 */
+	/* PostgreSQL database connection variables */
 	const char 	*conninfo;
 	PGconn 		*connection;
 
-	/* 
-	 * User input variables
-	 */
-	char 	user_input[LIMIT];
-	char	*user_input_ptr;
+	/* User input variables */
+	char 		user_input[LIMIT];
+	long int 	user_option;
+	/* Number validation */
+	char		*end_ptr;
 	
-	PQprintOpt print_options;
-	
-	user_input[0] = 0;	
-	user_input_ptr = &(user_input[0]);
-
+	/* Should this be created only when the user wants to 
+	 * query#FFFFFF? */
+	PQprintOpt 	print_options;
 	
 	/* Setup print options structure */
 	print_options.header = 1;
@@ -87,114 +80,75 @@ int main(void) {
 		return 1;
 	} else {
 		/* TODO indicate which database */
-		printf("%s","Successfully connected to database\n");
+		printf("Successfully connected to database\n");
 	}
 
-	/*
-	 * TODO consider using switch-case structure
-	 * User interaction
-	 */
 	do {
 		main_menu();
-		printf("Enter option: ");
-		if (fgets(user_input_ptr, sizeof(user_input), stdin) == NULL) {
-			printf("Error on user input\n");
+		printf("Select Option: ");
+		if (getstr(user_input, sizeof(user_input)) == NULL)
 			break;
-		} else {
-			if (*(user_input_ptr + strlen(user_input_ptr) - 1) == '\n')
-				*(user_input_ptr + strlen(user_input_ptr) - 1) = '\0';
-				
-			if (string_compare(user_input_ptr, "show songs") == 0) {
-				query_show(connection, "SELECT song_name FROM songs;", print_options);
-
-			} else if (string_compare(user_input_ptr, "show artists") == 0) {
-				query_show(connection, "SELECT artist_name FROM artists;", print_options);
-				
-			} else if (string_compare(user_input_ptr, "add song") == 0) {
-				/* 
-				 * Uniqueness doesn't appear to exist across artist names, 
-				 * album names, and song names.
-				 * Get ids for all entities then perform join query 
-				 */
-				add_song (connection);
-
-
-			} else if (string_compare(user_input_ptr, "quit") == 0) {
-				printf("%s", "program will close\n");
-
-			} else {
-				printf("%s\n", "invalid input");
-			}
+		
+		if ((user_option = strtol(user_input, &end_ptr, 10)) == LONG_MAX ||
+				user_option == LONG_MIN) {
+					perror("Error: ");
+					continue;
 		}
-	} while (string_compare(user_input_ptr, "quit") != 0);
+		
+		/* Check if user entered number */
+		if (*end_ptr == '\0' && user_input[0] != '\0') {
+			switch (user_option) {
+				case 1:
+					add_song(connection);
+					break;
+					
+				case 2:
+					query_show(connection, "SELECT artist_name FROM artists;", &print_options);
+					break;
+					
+				case 3:
+					query_show(connection, "SELECT album_name FROM albums;", &print_options);
+					break;
+					
+				case 4:
+					query_show(connection, "SELECT song_name FROM songs;", &print_options);
+					break;
+					
+				case 5:
+					search(connection, &print_options);
+					break;
+					
+				case USER_EXIT:
+					printf("%s", "program will close\n");
+					break;
+					
+				default:
+					printf("%s\n", "invalid input");
+					
+			}	
+		} else {
+			printf("Please enter a number\n");
+		}
+	} while (user_option != USER_EXIT);
 
 
 	PQfinish(connection);
 	return 0;
 }
 
-void main_menu() {
+
+void main_menu(void) {
 	printf(
 		"Options:\n"
-		"add song\n"
-		"show artists\n"
-		"show_songs\n"
-		"quit\n"
+		"1. Add a Song\n"
+		"2. Show all Artists\n"
+		"3. Show all Albums\n"
+		"4. Show all Songs\n"
+		"5. Search\n"
+		"6. Quit\n"
 	);
 	
 }
-
-void exit_on_error() {
-	
-	
-}
-
-
-/*
- * Displays a prompt message to the user indicating the kind of
- * information they should input. Takes user input and stores it 
- * into a char array.
- *
- * TODO Remove extra whitespace (leading + trailing)
- *
- * 	What are all the errors that could occur with using 
- * 	getchar()?
- *
- * 	How do I absolutely ensure that the buf_size
- * 	is actually a safe value to work with?
- *
- * TODO edit return values to only indicate error codes:
- * 	0 being successfull
- * 	1 being improper buf_size value
- * 	2 null pointers passed in
- * 	
- *
- *
- *   ********** WORK IN PROGRESS ***********
- */ 
- /*
-int get_user_input(const char *prompt, char *user_input, size_t user_input_limit) {
-	if (user_input_limit <= 0)
-		return 1;
-
-	if (prompt == NULL || user_input == NULL)
-		return 2;
-		
-	char 	user_char;
-	size_t 	i;
-
-	printf("%s", prompt);
-
-	// How should I break up this long line?
-	for (i = 0; i < (user_input_limit - 1) && (user_char = getchar()) != '\n' && (user_char != EOF && feof(stdin) == 0) && ferror(stdin) == 0; ++i) 
-		*(user_input + i) = user_char;
-	
-	
-	user_input[i] = '\0';
-
-	return 0;
-}
-*/
 
 
 /*
@@ -229,16 +183,137 @@ int string_compare(char *str1, const char *str2) {
 }
 
 
-/*
- * questionable
- */
-void query_show(PGconn *connection, const char *query, PQprintOpt print_options) {
-	if (connection != NULL) {
-		PGresult *query_result = NULL;
-		query_result = PQexec(connection, query);
-		PQprint(stdout, query_result, &print_options);
-		PQclear(query_result);
+int	edit_entity(PGconn *connection) {
+	
+	return 0;
+}
+
+
+void query_show(PGconn *connection, const char *query, PQprintOpt *print_options) {
+	PGresult *query_result;
+	
+	if (connection == NULL) {
+		fprintf(stderr, "Connection is null\n");
+		return;
 	}
+	
+	query_result = PQexec(connection, query);
+	PQprint(stdout, query_result, print_options);
+	PQclear(query_result);
+}
+
+
+
+int search(PGconn *connection, PQprintOpt *print_options) {
+	/* Hold main entities in string format like 'artist', 'album', 'song' */
+	const char *entities[ENTITY_COUNT];
+	/* User string to search for */
+	char search_str[LIMIT];
+	char *escaped_str;
+	char *end_ptr;
+	/* Query string to send to dbms */
+	char entity_query[LIMIT];
+	
+	PGresult *query_results[ENTITY_COUNT];
+	int result_count;
+	
+	long int user_option;
+	
+	size_t i, j, k;
+	
+	int return_code;
+	
+	return_code = 0;
+	result_count = 0;
+	
+	entities[0] = "artist";
+	entities[1] = "album";
+	entities[2] = "song";
+	
+	printf("Enter entity name: ");
+	if (getstr(search_str, sizeof(search_str)) == NULL)
+		return -1;
+
+	if ((escaped_str = PQescapeLiteral(connection, (char *) search_str, LIMIT)) == NULL) {
+		perror("error: ");
+		return -2;
+	}
+	
+	j = 1;
+	for (i = 0; i < ENTITY_COUNT; i++) {
+		strncpy(entity_query, 	"SELECT _id, _name "
+								"FROM s "
+								"WHERE _name ILIKE ;", sizeof(entity_query));								
+		insert_string(entity_query, entities[i], sizeof(entity_query), 7);
+		insert_string(entity_query, entities[i], sizeof(entity_query), strlen(entity_query) - 32);
+		insert_string(entity_query, entities[i], sizeof(entity_query), strlen(entity_query) - 21);
+		insert_string(entity_query, entities[i], sizeof(entity_query), strlen(entity_query) - 13);
+		insert_string(entity_query, escaped_str, sizeof(entity_query), strlen(entity_query) - 1);
+
+		
+		query_results[i] = PQexec(connection, entity_query);
+		result_count += PQntuples(query_results[i]);
+		
+		if (PQntuples(query_results[i]) != 0) {
+			printf("%s:\n", entities[i]);
+			for (k = 0; j <= (size_t) result_count; j++, k++) {
+				printf("%4lu: %s\n", j, PQgetvalue(query_results[i], k, 1));
+			}
+			
+			if (i < ENTITY_COUNT - 1) 
+				printf("---------------------------\n");
+		}
+	}
+	
+	PQfreemem(escaped_str);
+	
+	if (result_count <= 0) {
+		printf("No results for search term: %s\n", search_str);
+		return_code = 1;
+		goto Clear_Resources;
+	} else {
+		printf("Select item: ");
+		if (getstr(search_str, sizeof(search_str)) == NULL) {
+			return_code = -1;
+			goto Clear_Resources;
+		}
+		
+		if ((user_option = strtol(search_str, &end_ptr, 10)) == LONG_MAX ||
+			user_option == LONG_MIN) {
+			perror("Error: ");
+			return_code = 2;
+			goto Clear_Resources;
+		}
+		
+		if (*end_ptr != '\0' || search_str[0] == '\0') {
+			printf("Input is not a proper number\n");
+			return_code = 2;
+			goto Clear_Resources;
+		}
+		
+		result_count = 0;
+		for (i = 0; i < ENTITY_COUNT; i++) {
+			if (user_option > PQntuples(query_results[i])) {
+				user_option -= PQntuples(query_results[i]);
+			} else {
+				strncpy(entity_query, 	"SELECT * "
+										"FROM s "
+										"WHERE _id=;", sizeof(entity_query));
+				insert_string(entity_query, entities[i], sizeof(entity_query), 14);
+				insert_string(entity_query, entities[i], sizeof(entity_query), strlen(entity_query) - 5);
+				insert_string(entity_query, PQgetvalue(query_results[i], user_option - 1, 0), sizeof(entity_query), strlen(entity_query) - 1);
+				query_show(connection, entity_query, print_options);
+				break;
+			}
+		}
+	}
+	
+	Clear_Resources:
+		for (i = 0; i < ENTITY_COUNT; i++) {
+			PQclear(query_results[i]);
+		}
+		
+	return return_code;
 }
 
 
@@ -260,260 +335,197 @@ void query_show(PGconn *connection, const char *query, PQprintOpt print_options)
  * 	How should songs with multiple artists be handled?
  * 		1. delimit artists by ',' symbol
  * 		2. Ask user for number of artists, take in line-by-line
- * 		it's settled, 2.
+ * 
+ * 
  */
 int add_song(PGconn *connection) {	
-	/* Master query */
-	char 	main_query[LIMIT];
-	char	*main_query_ptr;
+	/* Artist -> Album -> Song */
+	const char	*entities[ENTITY_COUNT];
+	short int	insert_indexes[ENTITY_COUNT];
 	
-	/* Query variables */
-	char 	query[LIMIT];							
-	char	*query_ptr;
+	char		entity_values[ENTITY_COUNT][LIMIT];
+	char		entity_ID[ENTITY_COUNT][LIMIT];
+	
+	/* Master query */
+	char 		query[LIMIT];
 
 	/* Query result variables */
-	PGresult *query_result;
+	PGresult 	*query_result;
 
-	/* User input variables */
-	char	user_input[LIMIT];
-	char	*user_input_ptr;
-	
-	PQprintOpt print_options;
-	
-	/* Insert user artist string into query string */
-	char *query_insert_addr;
-	char *query_shift_addr;
-	
-	size_t artist_nlength;
-	
-	char *comma_addr;
-	char *temp_p;
-	
-	char *last_addr_in_query_str;
-	char *last_addr_in_query_buf;
-	
 	int tuples;
 	
-	char a_id_buf[LIMIT];
-	char *a_id_buf_ptr;
-	
-	char *endptr;
-	
-	/* long int variable holding user's selected artist id */
-	long int artist_id;
+	/* May be used for numeric input validation */
+	/*char *endptr;*/
 	
 	/* Artist count */
-	char artist_count;
+	/*char artist_count;*/
+	
+	/* loop control variable */
+	size_t i;
+	
+	/* PQ escaped string */
+	char *escaped_str;
+	
+	/* Initialize entity array */
+	entities[0] = "artist";
+	entities[1] = "album";
+	entities[2] = "song";
+	
 	
 	/* Initialize main query buf and str */
-	main_query_ptr = main_query;
-	strncpy(main_query_ptr, "SELECT s.song_name, al.album_name, a.artist_name "
-				"FROM songs AS s "
-				"JOIN albums AS al ON s.album_id=al.album_id "
-				"JOIN album_contributing_artists AS ca ON al.album_id=ca.album_id "
-				"JOIN artists AS a ON ca.artist_id=a.artist_id "
-				"WHERE ;", sizeof(main_query));
+	strncpy(query, 	"SELECT a.artist_id, al.album_id, s.song_id "
+					"FROM songs AS s "
+					"JOIN song_contributing_artists AS ca ON ca.song_id=s.song_id "
+					"JOIN artists AS a ON ca.artist_id=a.artist_id "
+					"JOIN albums AS al ON s.album_id=al.album_id "
+					"WHERE a.artist_name= AND al.album_name= AND s.song_name=;", sizeof(query));
 	
-	/* Initialize query buf and str */
-	query_ptr = query;
-	strncpy(query_ptr, 	"SELECT * "
-				"FROM artists "
-				"WHERE artist_name=;", sizeof(query));
+	insert_indexes[0] = 37;
+	insert_indexes[1] = 18;
+	insert_indexes[2] = 1;
 	
-	/* Setup print options struct */
-	print_options.header = 1;
-	print_options.align = 1;
-	print_options.fieldSep = "|";
-	
-	user_input_ptr = user_input;
-	
-	/* FEATURE: specify multiple artists will be put on hold for now */
-	/* Get number of artists from user */
-	/*
-	printf("Enter number of artists: ");
-	if (fgets(user_input_ptr, sizeof(user_input), stdin) == NULL) {
-		return -1;
-	}
-	*/
-	
-    	/* Get artist name(s) from user */
-	printf("Enter artist name: ");
-	if (fgets(user_input_ptr, sizeof(user_input), stdin) == NULL) {
-		printf("error: input");
-		return -1;
-	}
-		
-	/* Get rid of newline */
-	if (*(user_input_ptr + (strlen(user_input_ptr) - 1)) == '\n')
-		*(user_input_ptr + (strlen(user_input_ptr) - 1)) = '\0';
-	
-	/* 
-	 * Ensure string is safe to include in sql query to psql
-	 * Need to free memory with PQfreemem();
-	 */
-	if ((user_input_ptr = PQescapeLiteral(connection, user_input_ptr, sizeof(user_input))) == NULL) {
-		printf("error: escape input");
-		return -2;
-	}
-	
-	/*
-	 * Compute address to insert artist within query
-	 * hardcoded at first for now
-	 */
-	query_insert_addr = query_ptr + strlen(query_ptr) - 1;
-	query_shift_addr = NULL;
-	
-	artist_nlength = 0;
-									
-	/* comma_addr = NULL; */
-	temp_p = user_input_ptr;
-		
-	last_addr_in_query_str = query_ptr + strlen(query_ptr);
-	last_addr_in_query_buf = query_ptr + sizeof(query) - 1;
-	
-	/* number of rows returned from check query */
-	tuples = 0;
-	
-	/* Shift elements in query */
-	if (query_insert_addr + strlen(query_insert_addr) > last_addr_in_query_buf) {
-		printf("error: unable to shift");
-		return -3;
-	} query_shift_addr = query_insert_addr + artist_nlength;
-	
-	memmove(query_shift_addr, query_insert_addr, strlen(query_insert_addr) + 1);
-	/* Insert artist name into query */
-	memmove(query_insert_addr, temp_p, artist_nlength);
-	printf("[Artist Lookup Query]: %s\n", query_ptr);
-	
-	
-	/* buffer used for artist id input from user as string */
-	/*
-	a_id_buf[0] = ' ';
-	a_id_buf_ptr = &(a_id_buf[0]);
-	
+	/* Get artist, album, and song from user and insert into
+	 * item existence check query */
+	for (i = 0; i < ENTITY_COUNT; i++) {
+		printf("Enter %s name: ", entities[i]);
+		/* How to tell if there is still data in the input
+		 * buffer? i.e. did the user try to enter more data
+		 * than LIMIT */
+		if (getstr((char *) entity_values[i], LIMIT) == NULL)
+			return -1;
 
-	/* Search for commas in user input */
-	/*
-	do {
+			
 		/* 
-		 * compute artist name length. If no comma found,
-		 * take len of user input as artist length.
-		 * 
+		 * Ensure string is safe to include in sql query to psql
+		 * Need to free memory with PQfreemem();
 		 */
-		/*
-		if ((comma_addr = strchr(temp_p, ',')) != NULL)
-			artist_nlength = comma_addr - temp_p;
-		else
-			artist_nlength = strlen(temp_p);
+		if ((escaped_str = PQescapeLiteral(connection, (char *) entity_values[i], LIMIT)) == NULL) {
+			perror("error: ");
+			return -2;
+		}
 		
-		/*
-		 * Want to insert ' AND artist_name=' into query if more than 
-		 * one artist has been found on each iteration
-		 */
-		/*
-		 if (temp_p != user_input_ptr) {
-			 printf("second artist\n");
-			 /* Do shifting first */
-			 /*
-			 query_shift_addr = query_insert_addr + strlen(" AND artist_name=");
-			 memmove(query_shift_addr, query_insert_addr, strlen(query_insert_addr) + 1);
-			 
-			 /* Now insert */
-			/*
-			 memmove(query_insert_addr, temp_p, artist_nlength);
-			 query_insert_addr = query + strlen(query) - 1;
-		 }
+		strncpy((char *) entity_values[i], escaped_str, LIMIT);
+		insert_string(query, escaped_str, sizeof(query), strlen(query) - insert_indexes[i]);
 		
-		/* 
-		 * Determine if necessary to perform element shifting
-		 * Case: artist name is inserted within query string
-		 */
-		/*
-		if ((query_insert_addr >= query_ptr) && (query_insert_addr <= last_addr_in_query_str)) {
-			/* Ensure element shifting doesn't cause overflow */
-	/*
-			if (query_insert_addr + strlen(query_insert_addr) > last_addr_in_query_buf) {
-				printf("error: unable to shift");
-				return -3;
+		PQfreemem(escaped_str);
+	}
+	
+	
+	/*printf("Final Query: [%s]\n", query);*/
+	
+	query_result = PQexec(connection, query);
+	tuples = PQntuples(query_result);
+	PQclear(query_result);
+	
+	/* Insert item into database if it doesn't already exist */
+	if (tuples == 0) {
+		query_result = PQexec(connection, "BEGIN;");
+		PQclear(query_result);
+		/* Form basic insert queries */
+		for (i = 0; i < ENTITY_COUNT; i++) {
+			strncpy(query, 	"INSERT INTO s (_name) "
+							"VALUES () "
+							"RETURNING _id;", sizeof(query));
+			/* Insert relation name */						
+			insert_string(query, entities[i], sizeof(query), 12);
+			/* Insert column name */
+			insert_string(query, entities[i], sizeof(query), strlen(query) - 31);
+			/* If song insert album_id */
+			if (i == 2) {
+				insert_string(query, ", album_id", sizeof(query), strlen(query) - 26);
+			}			
+			/* Insert value */
+			insert_string(query, entity_values[i], sizeof(query), strlen(query) - 16);
+			/* If song insert album_id value */
+			if (i == 2) {
+				insert_string(query, ",", sizeof(query), strlen(query) - 16);
+				insert_string(query, entity_ID[1], sizeof(query), strlen(query) - 16);
 			}
-			/* 
-			 * Element-Shifting
-			 * 
-			 * distance between comma_addr and temp_p
-			 * will give the length of artist name
-			 */
-	/*
-			query_shift_addr = query_insert_addr + artist_nlength;
-			/* copy strlen(query_insert_addr) + 1 bytes from query_insert_addr to include '\0' */
-	/*
-			memmove(query_shift_addr, query_insert_addr, strlen(query_insert_addr) + 1);
-			
-		/* 
-		 * Case: artist name is inserted after the query
-		 * string. depending on how many elements after
-		 * the query string will determine how many 
-		 * whitespace characters will need to be written
-		 * up until the insert address.
-		 */
-	
-	/*
-		} else if (query_insert_addr >=	(last_addr_in_query_str) && query_insert_addr <= last_addr_in_query_buf) {
-			/*
-			 * Ensure only one null char is present at the 
-			 * end of the string. Pad every element leading
-			 * up to insert addr with whitespace to make 
-			 * sure unwanted null chars and data is not in 
-			 * the buffer leading to the insert address.
-			 */
-	/*
-			memset(last_addr_in_query_str, ' ', (query_insert_addr - last_addr_in_query_str));
-			/* Ensure there is null char at end of entire string */
-	/*
-			*(query_insert_addr + artist_nlength) = '\0';
+			/* Insert column name */
+			insert_string(query, entities[i], sizeof(query), strlen(query) - 4);
+			/*printf("Insert Query: [%s]\n", query);*/
 			
 			
-		/* Case: insert address falls outside the bounds of buffer. */
-	/*
-		} else {
-			printf("error: out of bounds insert\n");
-			return -4;
+			
+			query_result = PQexec(connection, query);
+			strncpy((char *)entity_ID[i], PQgetvalue(query_result, 0, 0), sizeof(query));
+			/*printf("Returned ID: [%s]\n", entity_ID[i]);*/
+			PQclear(query_result);
 		}
 		
-		/* Insert ampersand */
-	/*
-		if (temp_p != user_input_ptr) {
-			
-		}
+		/* Form insert queries on the associative relations */
+		strncpy(query, 	"INSERT INTO song_contributing_artists (artist_id, song_id) "
+						"VALUES (,);", sizeof(query));
+		insert_string(query, entity_ID[0], sizeof(query), strlen(query) - 3);
+		insert_string(query, entity_ID[2], sizeof(query), strlen(query) - 2);			
+		/*printf("Associative Insert Query: [%s]\n", query);*/
 		
-		/* Insert artist name into query */
-	/*
-		memmove(query_insert_addr, temp_p, artist_nlength);
-		printf("[Artist Lookup Query]: %s\n", query_ptr);
-		temp_p = comma_addr + 1;
-	} while (comma_addr != NULL);
-	
-	
-	/* PQclear(query_result); */
+		query_result = PQexec(connection, query);
+		PQclear(query_result);
+		
+		query_result = PQexec(connection, "END;");
+		PQclear(query_result);
+	} else {
+		printf("Item already exists\n");
+	}
 	return 0;
+}
+
+
+
+/* TODO: follow formatted string pattern:
+ * 			introduce format specifiers that can indicate
+ * 			where the string should be inserted. */
+char *insert_string(char *dest, const char *src, size_t dest_size, int index) {
+	char *insert_addr;
+	char *shift_addr;
+	char *dest_str_bound;
+	char *dest_buf_bound;
+	size_t src_len;
+	
+	
+	src_len = strlen(src);
+	/* Inclusive upper bounds for string and buffer */
+	dest_str_bound = dest + strlen(dest) - 1;
+	dest_buf_bound = dest + dest_size - 1;
+	
+	if (dest_str_bound >= dest_buf_bound) {
+		printf("Initial overflow\n");
+		return NULL;
+	}
+	
+	insert_addr = dest + index;
+	
+	/* The source string will be inserted within the 
+	 * destination string and element shifting will be 
+	 * required. */
+	if (insert_addr >= dest && insert_addr <= dest_str_bound) {
+		if ((dest_str_bound + src_len + 1) > dest_buf_bound) {
+			printf("Insert overflow\n");
+			return NULL;
+		}
+		shift_addr = insert_addr + src_len;
+		memmove(shift_addr, insert_addr, strlen(insert_addr) + 1);
+	} 
+	/* The source string will be inserted after the 
+	 * destination string and whitespace padding will 
+	 * be required between source and destination string. */
+	else if (insert_addr > dest_str_bound && insert_addr <= dest_buf_bound) {
+		if (insert_addr + src_len > dest_buf_bound) {
+			printf("Insert overflow\n");
+			return NULL;
+		}
 		
-		
-	/*
-	 * Extract artist(s) from single line.
-	 * Iterate each char in persuit for ',' char. If NULL 
-	 * character is reached, break from iteration loop.
-	 * Shift over characters in query string to insert 
-	 * artist name in proper position. 
-	 * Overflow must not happen in process of char shifting.
-	 * Access to buffer is possible, perform sizeof 
-	 * operation on buf to get limit.
-	 * At any given position in buffer there will be some 
-	 * number of characters available to write to before
-	 * going out of bounds:
-	 * sizeof(query) - |query_addr - insert_index| - 1
-	 * Depending on whether a string is to be inserted
-	 * inside or after the query, need to ensure NULL is 
-	 * appended to query.
-	 * 
-	 * What if eui isn't terminated?
-	 */
+		memset(dest_str_bound + 1, ' ', insert_addr - (dest_str_bound + 1));
+		/* Ensure there is null char at end of entire string */
+		*(insert_addr + src_len) = '\0';
+	} else {
+		printf("Index out of bounds\n");
+		return NULL;
+	}
+	
+	/* Finally insert src into the destination string 
+	 * offsetted by index */
+	memmove(insert_addr, src, src_len);
+	return dest;
 }
