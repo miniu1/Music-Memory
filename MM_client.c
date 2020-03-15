@@ -4,34 +4,74 @@
 #include "libpq-fe.h"
 #include <limits.h>
 #include "keyin.h"
+#include <stdarg.h>
+
+
+/* Defines */
+#define DBNAME			"music_memory"
+
 
 #define LIMIT 			450	/* buf max size */
 #define ENTITY_COUNT 	3	/* Number of entities (artist, album, song) to be used in queries */
 #define USER_EXIT		6
 
 
+/* Relation Constants */
+/* Supporting Elementary Relations */
+#define ARTIST_ROLES         "artist_roles"
+#define GENDERS              "genders"
+#define COUNTRIES            "countries"
+#define MUISC_GROUP_TYPES    "music_group_types"
+#define INSTRUMENTS          "instruments"
+#define GENRES               "genres"
+#define SONG_FORMATS         "song_formats"
+
+/* Primary Relations */
+#define ARTISTS              "artists"
+#define ALBUMS               "albums"
+#define SONGS                "songs"
+
+/* Musician Involvement Relations */
+#define MUSICIANS            "musicians"
+#define SONG_PRODUCERS       "song_producers"
+#define SONG_COMPOSERS       "song_composers"
+#define SONG_LYRICISTS       "song_lyricists"
+#define SONG_ARRANGERS       "song_arrangers"
+
+/* Users Information Relations */
+#define USERS                "users"
+#define USER_SONG_LISTENS    "user_song_listens"
+#define USER_PLAYLISTS       "user_playlists"
+#define USER_PLAYLIST_SONGS  "user_playlist_songs"
+
+/* Tag Relations */
+#define TAGS                 "tags"
+#define SONG_TAGS            "song_tags"
+
+
+
+/* How general can we get? */
+typedef enum commands_t {
+	ADD_ENTITY,
+	SEARCH_ENTITY,
+	EDIT_ENTITY,
+	VIEW_ENTITY
+	
+} commands;
+
+
+	
 /*
- * How do I organize many similar/different options like
+ * How do I organize many similar but different options like
  * add song, add artist, show songs, show albums, edit song,
  * edit album, etc. as the queries behind these commands will
  * more or less be very similar
  *
  *
- *
- * TODO replace get_user_input() with implementation of fgets()
- * 	and call strlen() to get length of strings. The benefits 
- * 	of stored vs calculated values in this case may not 
- * 	be significant. This should remove the problem of returning
- * 	negative values from string manipulation functions as error 
- * 	codes that were intended to return the length of the string.
- *
- * 	OR 
- *
- * 	make sure that getchar() is implemented in a safe and 
- * 	efficient way. change the return types from all string 
- * 	manipulation functions to either void or char * to avoid
- * 	problem mentioned above.  
- * 	EDIT: return types int to indicate error codes
+ * When user enters more characters than expected there are 
+ * still left in the buffer so subsequent calls will consume
+ * the remaining data. 
+ * 	-> How can I detect over limit and discard the rest?
  * 
  * 
  * 
@@ -50,13 +90,18 @@ int		edit_entity(PGconn *connection);
 void 	main_menu(void);
 
 int main(void) {
+	/* History array */
+	static 
+	
 	/* PostgreSQL database connection variables */
 	const char 	*conninfo;
+	const char	*dbname;
 	PGconn 		*connection;
 
 	/* User input variables */
 	char 		user_input[LIMIT];
 	long int 	user_option;
+	
 	/* Number validation */
 	char		*end_ptr;
 	
@@ -65,9 +110,9 @@ int main(void) {
 	PQprintOpt 	print_options;
 	
 	/* Setup print options structure */
-	print_options.header = 1;
-	print_options.align = 1;
-	print_options.fieldSep = "|";
+	print_options.header 	= 1;
+	print_options.align 	= 1;
+	print_options.fieldSep 	= "|";
 
 	
 	/* Connect to database */
@@ -76,11 +121,10 @@ int main(void) {
 
 	/* Check for successful connection */
 	if (PQstatus(connection) != CONNECTION_OK) {
-		printf("Failed to connect to database: %s\n", PQerrorMessage(connection));
+		printf("Failed to connect to database [%s]: %s\n", DBNAME, PQerrorMessage(connection));
 		return 1;
 	} else {
-		/* TODO indicate which database */
-		printf("Successfully connected to database\n");
+		printf("Successfully connected to database [%s]\n", DBNAME);
 	}
 
 	do {
@@ -89,10 +133,11 @@ int main(void) {
 		if (getstr(user_input, sizeof(user_input)) == NULL)
 			break;
 		
-		if ((user_option = strtol(user_input, &end_ptr, 10)) == LONG_MAX ||
-				user_option == LONG_MIN) {
-					perror("Error: ");
-					continue;
+		user_option = strtol(user_input, &end_ptr, 10);
+		if (user_option == LONG_MAX || 
+			user_option == LONG_MIN) {
+				perror("Error: ");
+				continue;
 		}
 		
 		/* Check if user entered number */
@@ -119,11 +164,11 @@ int main(void) {
 					break;
 					
 				case USER_EXIT:
-					printf("%s", "program will close\n");
+					printf("program will close\n");
 					break;
 					
 				default:
-					printf("%s\n", "invalid input");
+					printf("invalid input\n");
 					
 			}	
 		} else {
@@ -211,6 +256,7 @@ int search(PGconn *connection, PQprintOpt *print_options) {
 	char search_str[LIMIT];
 	char *escaped_str;
 	char *end_ptr;
+	
 	/* Query string to send to dbms */
 	char entity_query[LIMIT];
 	
@@ -391,8 +437,9 @@ int add_song(PGconn *connection) {
 		/* How to tell if there is still data in the input
 		 * buffer? i.e. did the user try to enter more data
 		 * than LIMIT */
-		if (getstr((char *) entity_values[i], LIMIT) == NULL)
+		if (getstr((char *) entity_values[i], LIMIT) == NULL) {
 			return -1;
+		}
 
 			
 		/* 
@@ -472,6 +519,38 @@ int add_song(PGconn *connection) {
 }
 
 
+#define FORMAT_SPECIFIER_START '%'
+
+char *string_insert(char *dest, size_t dest_size, const char *format, ...) {
+	va_list args;
+	char *p;
+	char *format_str_bound;
+	
+	format_str_bound = format + strlen(format);
+	for (p = format; p < format_str_bound; p++) {
+		
+	}
+	
+	va_start(args, format);
+	
+	/* Need to record the size of the argument:
+	 * char*:
+	 * 	use strlen()
+	 * int, float, double, long:
+	 * 	Don't use sizeof - ultimately the number will be 
+	 * 	represented as a string in the buffer. So it's 
+	 * 	better to use sizeof on char and count the number of
+	 * 	digits in the number.
+	 * char:
+	 * 	use sizeof - single char variable should resolve 
+	 * 	to a single character unlike an integer where each
+	 * 	digit in the number will have to be represented by
+	 * 	a character. */
+	vsprintf(dest, format, args);
+		
+	
+	
+}
 
 /* TODO: follow formatted string pattern:
  * 			introduce format specifiers that can indicate
