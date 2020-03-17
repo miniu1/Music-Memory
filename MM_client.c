@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include "libpq-fe.h"
 #include <limits.h>
 #include "keyin.h"
@@ -95,7 +96,6 @@ int main(void) {
 	
 	/* PostgreSQL database connection variables */
 	const char 	*conninfo;
-	const char	*dbname;
 	PGconn 		*connection;
 
 	/* User input variables */
@@ -116,7 +116,7 @@ int main(void) {
 
 	
 	/* Connect to database */
-	conninfo = "dbname = music_memory";
+	conninfo = "dbname = " DBNAME;
 	connection = PQconnectdb(conninfo);
 
 	/* Check for successful connection */
@@ -129,6 +129,7 @@ int main(void) {
 
 	do {
 		main_menu();
+		
 		printf("Select Option: ");
 		if (getstr(user_input, sizeof(user_input)) == NULL)
 			break;
@@ -234,6 +235,8 @@ int	edit_entity(PGconn *connection) {
 }
 
 
+/* perhaps separate entity display functionality from this 
+ * function */
 void query_show(PGconn *connection, const char *query, PQprintOpt *print_options) {
 	PGresult *query_result;
 	
@@ -521,21 +524,81 @@ int add_song(PGconn *connection) {
 
 #define FORMAT_SPECIFIER_START '%'
 
+/*
+ * %s
+ * %d
+ * %ld
+ * %f
+ * %c
+ * %u
+ * %hi
+ * %hu
+ * %Lf
+ * 
+ * for now let's just start with simple single specifiers:
+ * %s, %d, %f, %c, 
+ * 
+ */
 char *string_insert(char *dest, size_t dest_size, const char *format, ...) {
 	va_list args;
-	char *p;
+	char *p_char;
 	char *format_str_bound;
+	size_t format_len;
 	
-	format_str_bound = format + strlen(format);
-	for (p = format; p < format_str_bound; p++) {
-		
+	
+	
+	p_char = NULL;
+	format_len = strlen(format);
+	
+	/* Sanity check */
+	if (format_len > dest_size) {
+		return NULL;
 	}
 	
 	va_start(args, format);
 	
+	do {
+		p_char = index(format, FORMAT_SPECIFIER_START);
+		
+		if (p_char == NULL) {
+			break;
+		}
+		
+		strncpy(dest, format, (p_char - format));
+		p_char++;
+		
+		switch (*p_char) {
+			case 's':
+				
+				break;
+			
+			case 'd':
+			
+				break;
+				
+			case 'f':
+			
+				break;
+				
+			case 'c':
+			
+				break;
+				
+			case '%':
+			
+				break;
+				
+			default:
+			
+				break;
+			
+			
+		}
+	} while (p_char != NULL);
+	
 	/* Need to record the size of the argument:
 	 * char*:
-	 * 	use strlen()
+	 * 	use strlen() with sizeof char
 	 * int, float, double, long:
 	 * 	Don't use sizeof - ultimately the number will be 
 	 * 	represented as a string in the buffer. So it's 
@@ -549,7 +612,7 @@ char *string_insert(char *dest, size_t dest_size, const char *format, ...) {
 	vsprintf(dest, format, args);
 		
 	
-	
+	return NULL;
 }
 
 /* TODO: follow formatted string pattern:
