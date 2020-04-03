@@ -3,11 +3,11 @@ include_libpq	:= -I$(shell pg_config --includedir)
 lib_libpq		:= -L$(shell pg_config --libdir) -lpq
 
 MM_client : $(objects)
-	gcc -g $(include_libpq) -o MM_client $(objects) $(lib_libpq) -ansi \
+	gcc -g $(include_libpq) -o MM_client -lm $(objects) $(lib_libpq) -ansi \
 	-pedantic -Wall -Wextra
 
 MM_client.o : keyin.h
-	gcc -g $(include_libpq) -c MM_client.c $(lib_libpq) -ansi \
+	gcc -g $(include_libpq) -c MM_client.c -lm $(lib_libpq) -ansi \
 	-pedantic -Wall -Wextra
 	
 keyin.o :

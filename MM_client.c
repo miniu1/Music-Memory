@@ -1,12 +1,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <strings.h>
 #include "libpq-fe.h"
 #include <limits.h>
 #include "keyin.h"
 #include <stdarg.h>
-
+#include <math.h>
 
 /* Defines */
 #define DBNAME			"music_memory"
@@ -16,8 +15,11 @@
 #define ENTITY_COUNT 	3	/* Number of entities (artist, album, song) to be used in queries */
 #define USER_EXIT		6
 
+#define B_TRUE			1
+#define B_FALSE			0
 
-/* Relation Constants */
+
+/* Relation Constants */	
 /* Supporting Elementary Relations */
 #define ARTIST_ROLES         "artist_roles"
 #define GENDERS              "genders"
@@ -50,7 +52,6 @@
 #define SONG_TAGS            "song_tags"
 
 
-
 /* How general can we get? */
 typedef enum commands_t {
 	ADD_ENTITY,
@@ -81,7 +82,7 @@ typedef enum commands_t {
  /* Utility functions */
 int 	string_compare(char *str1, const char *str2);
 char 	*insert_string(char *dest, const char *src, size_t dest_size, int index);
-
+char    *string_insert(char *dest, size_t dest_size, const char *format, ...);
 /* Core functions */
 void 	query_show(PGconn *connection, const char *query, PQprintOpt *print_options);
 int 	add_song(PGconn *connection);
@@ -92,7 +93,7 @@ void 	main_menu(void);
 
 int main(void) {
 	/* History array */
-	static 
+	static int history;
 	
 	/* PostgreSQL database connection variables */
 	const char 	*conninfo;
@@ -105,9 +106,15 @@ int main(void) {
 	/* Number validation */
 	char		*end_ptr;
 	
+	/* Test buffer */
+	char        buff[LIMIT];
+	
 	/* Should this be created only when the user wants to 
 	 * query#FFFFFF? */
 	PQprintOpt 	print_options;
+	
+	/* Setup test buffer */
+	buff[0] = '\0';
 	
 	/* Setup print options structure */
 	print_options.header 	= 1;
@@ -122,7 +129,7 @@ int main(void) {
 	/* Check for successful connection */
 	if (PQstatus(connection) != CONNECTION_OK) {
 		printf("Failed to connect to database [%s]: %s\n", DBNAME, PQerrorMessage(connection));
-		return 1;
+		return -1;
 	} else {
 		printf("Successfully connected to database [%s]\n", DBNAME);
 	}
@@ -168,6 +175,19 @@ int main(void) {
 					printf("program will close\n");
 					break;
 					
+			    case 7:
+			        if ((string_insert(buff, LIMIT, "test: %d %d %c %s", 
+			                                     1, 2, 'c', "yes")) != NULL) {
+			            printf("buff = [%s]\n", buff);
+					}
+					
+					if ((string_insert(buff, LIMIT, "test2: %d %d %c %s", 
+			                                     3, 4, 'f', "ok")) != NULL) {
+			            printf("buff = [%s]\n", buff);
+					}
+						
+					break;
+					
 				default:
 					printf("invalid input\n");
 					
@@ -182,7 +202,6 @@ int main(void) {
 	return 0;
 }
 
-
 void main_menu(void) {
 	printf(
 		"Options:\n"
@@ -192,42 +211,19 @@ void main_menu(void) {
 		"4. Show all Songs\n"
 		"5. Search\n"
 		"6. Quit\n"
+		"7. Test var_arg function\n"
 	);
-	
 }
 
-
-/*
- * Compares two char array strings.
- * -1 is returned indicating null pointer passed in
- * 0 is returned indicating same strings.
- * 1 is returned if the two strings are not equal in length.
- * 2 is returned if the two strings are equal in length but
- * dont have the same characters.
- *
- */
-int string_compare(char *str1, const char *str2) {
-	size_t i, str1_len;
+int show_menu( ) {
 	
-	if (str1 == NULL || str2 == NULL)
-		return -1;
-		
-
-	str1_len = strlen(str1);
-
-	/* Make sure same size */
-	if (strlen(str2) != str1_len) 
-		return 1;
-
-	for (i = 0; i < str1_len; ++i) {
-		/* Find not same character */
-		if (*(str1 + i) != *(str2 + i))
-			return 2;
-	}
-
 	return 0;
 }
 
+int add_entity(PGconn *connection) {
+	
+	return 0;
+}
 
 int	edit_entity(PGconn *connection) {
 	
@@ -290,6 +286,13 @@ int search(PGconn *connection, PQprintOpt *print_options) {
 	
 	j = 1;
 	for (i = 0; i < ENTITY_COUNT; i++) {
+		string_insert(entity_query, sizeof(entity_query), 
+		              "SELECT %s_id, %s_name "
+		              "FROM %ss "
+		              "WHERE %s_name ILIKE %s;",
+		              entities[i], entities[i], entities[i], entities[i],
+		              escaped_str);
+		/*
 		strncpy(entity_query, 	"SELECT _id, _name "
 								"FROM s "
 								"WHERE _name ILIKE ;", sizeof(entity_query));								
@@ -298,7 +301,8 @@ int search(PGconn *connection, PQprintOpt *print_options) {
 		insert_string(entity_query, entities[i], sizeof(entity_query), strlen(entity_query) - 21);
 		insert_string(entity_query, entities[i], sizeof(entity_query), strlen(entity_query) - 13);
 		insert_string(entity_query, escaped_str, sizeof(entity_query), strlen(entity_query) - 1);
-
+		*/
+		
 		
 		query_results[i] = PQexec(connection, entity_query);
 		result_count += PQntuples(query_results[i]);
@@ -345,12 +349,20 @@ int search(PGconn *connection, PQprintOpt *print_options) {
 			if (user_option > PQntuples(query_results[i])) {
 				user_option -= PQntuples(query_results[i]);
 			} else {
+				string_insert(entity_query, sizeof(entity_query),
+				              "SELECT * "
+				              "FROM %ss "
+				              "WHERE %s_id=%s;",
+				              entities[i], entities[i], 
+				              PQgetvalue(query_results[i], user_option - 1, 0));
+				/*
 				strncpy(entity_query, 	"SELECT * "
 										"FROM s "
 										"WHERE _id=;", sizeof(entity_query));
 				insert_string(entity_query, entities[i], sizeof(entity_query), 14);
 				insert_string(entity_query, entities[i], sizeof(entity_query), strlen(entity_query) - 5);
 				insert_string(entity_query, PQgetvalue(query_results[i], user_option - 1, 0), sizeof(entity_query), strlen(entity_query) - 1);
+				*/
 				query_show(connection, entity_query, print_options);
 				break;
 			}
@@ -536,83 +548,191 @@ int add_song(PGconn *connection) {
  * %Lf
  * 
  * for now let's just start with simple single specifiers:
- * %s, %d, %f, %c, 
+ * %s, %d, %c 
  * 
  */
 char *string_insert(char *dest, size_t dest_size, const char *format, ...) {
+	
 	va_list args;
-	char *p_char;
-	char *format_str_bound;
+	char   *fmt_cur_addr;
+	char   *dest_cur_addr;
+	char   *last_percent_addr;
+	char   *format_str_bound;
 	size_t format_len;
+	size_t arg_len;
+	size_t distance;
 	
+	struct help {
+		union unk_data {
+			int    int_val;
+			long   long_val;
+			char   char_val;
+			float  float_val;
+			double double_val;
+			char * str_addr;
+			void * void_addr;
+		} var_data;
+		
+		unsigned int mem_alloc : 1;
+		
+		char *str_data;
+		
+	} hd;
 	
+	/* Make some initializations */
+	hd.var_data.int_val = 0;
+	hd.mem_alloc        = B_FALSE;
+	hd.str_data         = NULL;
 	
-	p_char = NULL;
-	format_len = strlen(format);
+	fmt_cur_addr        = NULL;
+	dest_cur_addr       = dest;
+	last_percent_addr   = format;
+	format_len          = strlen(format);
+	format_str_bound    = format + strlen(format);
+	distance            = 0;
 	
-	/* Sanity check */
+	/* Some sanity checks */
 	if (format_len > dest_size) {
 		return NULL;
 	}
 	
+	/* Do some more sanity checks - make sure number of format specifers and 
+	 * number of arguments 1:1 match if it's even possible */
+	
+	/* Signal the beginning of the varargs */
 	va_start(args, format);
 	
-	do {
-		p_char = index(format, FORMAT_SPECIFIER_START);
+	while ((fmt_cur_addr = strchr(last_percent_addr, FORMAT_SPECIFIER_START)) 
+	                                                                    != NULL) {
+		distance = fmt_cur_addr - last_percent_addr;
+	    /* Copy (p_char - format) number of bytes from 
+		 * format to dest. i.e. copy all bytes leading up
+		 * to the '%' character into dest */
+		strncpy(dest_cur_addr, 
+		        last_percent_addr, 
+		        distance);
+		        
+		dest_cur_addr += distance;
 		
-		if (p_char == NULL) {
-			break;
-		}
+		/* Now let's update our memory of last occurrence of percent char */
+		last_percent_addr = fmt_cur_addr + 2;
 		
-		strncpy(dest, format, (p_char - format));
-		p_char++;
+		/* Advance to the type specifier */
+		fmt_cur_addr++;
 		
-		switch (*p_char) {
+		/* Need to record the size of the argument:
+		 * char*:
+		 * 	use strlen() with sizeof char
+		 * int, float, double, long:
+		 * 	Don't use sizeof - ultimately the number will be 
+		 * 	represented as a string in the buffer. So it's 
+		 * 	better to use sizeof on char and count the number of
+		 * 	digits in the number.
+		 * char:
+		 * 	use sizeof - single char variable should resolve 
+		 * 	to a single character unlike an integer where each
+		 * 	digit in the number will have to be represented by
+		 * 	a character. */
+		switch (*fmt_cur_addr) {
 			case 's':
+				hd.str_data = va_arg(args, char *);
+				arg_len = strlen(hd.str_data) * sizeof(char);
 				
 				break;
-			
+
 			case 'd':
-			
-				break;
-				
-			case 'f':
-			
+			    hd.var_data.int_val = va_arg(args, int);
+			    arg_len = (size_t) (log10((double) hd.var_data.int_val) + 1) * 
+			                                                   sizeof(char);
+			    hd.str_data = calloc(1, arg_len + 1);
+			    hd.mem_alloc = B_TRUE;
+			    sprintf(hd.str_data, "%d", hd.var_data.int_val);                                               
 				break;
 				
 			case 'c':
-			
+			    hd.var_data.char_val = (char) va_arg(args, int);
+				arg_len = sizeof(char);
+				
+				hd.str_data = calloc(1, arg_len + 1);
+				hd.mem_alloc = B_TRUE;
+				sprintf(hd.str_data, "%c", hd.var_data.char_val);
 				break;
 				
 			case '%':
-			
+				printf("yes\n");
 				break;
 				
 			default:
-			
+			    fprintf(stderr, "This wasn't supposed to happen\n");
 				break;
-			
-			
 		}
-	} while (p_char != NULL);
-	
-	/* Need to record the size of the argument:
-	 * char*:
-	 * 	use strlen() with sizeof char
-	 * int, float, double, long:
-	 * 	Don't use sizeof - ultimately the number will be 
-	 * 	represented as a string in the buffer. So it's 
-	 * 	better to use sizeof on char and count the number of
-	 * 	digits in the number.
-	 * char:
-	 * 	use sizeof - single char variable should resolve 
-	 * 	to a single character unlike an integer where each
-	 * 	digit in the number will have to be represented by
-	 * 	a character. */
-	vsprintf(dest, format, args);
 		
+		/* Incoming arg will replace the format specifier completely, so
+		 * subtract 2 from the length added */
+		format_len += (arg_len - 2);
+		
+		if (format_len >= dest_size) {
+			/* TODO: print argument number, size of argument, dest size */
+			fprintf(stderr, "Destination buffer is not large enough\n");
+			printf("format_len = [%lu]\n" "dest_size = [%lu]\n",
+			       format_len, dest_size);
+			return NULL;
+		}
+		
+		/*sprintf(format_spec, "%%%c", *fmt_cur_addr);
+		printf("dest_cur_addr = [%p] [%s]\n"
+		       "hd.str_data = [%s]\n",
+		       dest_cur_addr,
+		       dest_cur_addr,
+		       hd.str_data);
+		
+		       
+		dest_cur_addr += sprintf(last_percent_addr, 
+		                         format_spec, 
+		                         hd.str_data);
+		*/
+		strncpy(dest_cur_addr, hd.str_data, arg_len); 
+		dest_cur_addr += arg_len;
+	}
+
+	strncpy(dest_cur_addr, 
+	        last_percent_addr, 
+	        (format + strlen(format) - last_percent_addr) + 1);
+	        
+	va_end(args);
+	/* vsprintf(dest, format, args); */
+	return dest;
+}
+
+/*
+ * Compares two char array strings.
+ * -1 is returned indicating null pointer passed in
+ * 0 is returned indicating same strings.
+ * 1 is returned if the two strings are not equal in length.
+ * 2 is returned if the two strings are equal in length but
+ * dont have the same characters.
+ *
+ */
+int string_compare(char *str1, const char *str2) {
+	size_t i, str1_len;
 	
-	return NULL;
+	if (str1 == NULL || str2 == NULL)
+		return -1;
+		
+
+	str1_len = strlen(str1);
+
+	/* Make sure same size */
+	if (strlen(str2) != str1_len) 
+		return 1;
+
+	for (i = 0; i < str1_len; ++i) {
+		/* Find not same character */
+		if (*(str1 + i) != *(str2 + i))
+			return 2;
+	}
+
+	return 0;
 }
 
 /* TODO: follow formatted string pattern:
