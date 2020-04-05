@@ -573,9 +573,9 @@ char *string_insert(char *dest, size_t dest_size, const char *format, ...) {
 			void * void_addr;
 		} var_data;
 		
-		unsigned int mem_alloc : 1;
-		
 		char *str_data;
+		
+		unsigned int mem_alloc : 1;
 		
 	} hd;
 	
@@ -693,6 +693,12 @@ char *string_insert(char *dest, size_t dest_size, const char *format, ...) {
 		*/
 		strncpy(dest_cur_addr, hd.str_data, arg_len); 
 		dest_cur_addr += arg_len;
+		
+		if (hd.mem_alloc == B_TRUE) {
+			free(hd.str_data);
+			hd.mem_alloc = B_FALSE;
+		}
+			
 	}
 
 	strncpy(dest_cur_addr, 
